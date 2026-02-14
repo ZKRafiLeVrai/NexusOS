@@ -4,7 +4,7 @@
 #include "memory.h"
 #include "vfs.h"
 #include "timer.h"
-
+#include "io.h" 
 #define SHELL_BUFFER_SIZE 256
 
 static char command_buffer[SHELL_BUFFER_SIZE];
