@@ -70,12 +70,21 @@ $(BUILD_DIR)/%.o: %.asm
 # Création de l'image ISO
 iso: $(KERNEL_BIN)
 	@echo "Creating ISO image..."
+	@echo "Step 1: Clean and create ISO directories..."
+	@rm -rf $(ISO_DIR)
 	@mkdir -p $(ISO_DIR)/boot/grub
-	@mkdir -p $(ISO_DIR)/nexus
-	@cp $(KERNEL_BIN) $(ISO_DIR)/nexus/nexus.bin
-	@cp $(BOOT_DIR)/grub/grub.cfg $(ISO_DIR)/boot/grub/
-	grub-mkrescue -o nexus.iso $(ISO_DIR)
+	@mkdir -p $(ISO_DIR)/boot/nexus
+	@echo "Step 2: Copy kernel binary..."
+	@cp -v $(KERNEL_BIN) $(ISO_DIR)/boot/nexus/nexus.bin
+	@echo "Step 3: Copy GRUB configuration..."
+	@cp -v $(BOOT_DIR)/grub/grub.cfg $(ISO_DIR)/boot/grub/
+	@echo "Step 4: Generate ISO with grub-mkrescue..."
+	@grub-mkrescue -o nexus.iso $(ISO_DIR)
 	@echo "ISO created: nexus.iso"
+	@ls -lh nexus.iso
+	@echo ""
+	@echo "ISO structure:"
+	@find $(ISO_DIR) -type f
 
 # Exécution avec QEMU (BIOS)
 run: iso
@@ -88,6 +97,7 @@ run-uefi: iso
 # Nettoyage
 clean:
 	rm -rf $(BUILD_DIR)
+	rm -rf $(ISO_DIR)
 	rm -f nexus.iso
 	@echo "Clean completed"
 
