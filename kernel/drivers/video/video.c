@@ -1,6 +1,6 @@
 #include "video.h"
 #include "io.h"
-#include <stdarg.h>
+#include "stdarg.h"
 
 #define VGA_WIDTH 80
 #define VGA_HEIGHT 25
