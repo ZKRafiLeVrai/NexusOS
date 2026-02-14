@@ -12,31 +12,30 @@ KERNEL_DIR := kernel
 BOOT_DIR := boot
 BUILD_DIR := build
 ISO_DIR := boot/iso
-LIBC_DIR := libc
 USERLAND_DIR := userland
 
 # Flags de compilation
-CFLAGS := -m64 -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-rtti \
+CFLAGS := -m64 -ffreestanding -O2 -Wall -Wextra -fno-exceptions \
           -nostdlib -nostdinc -fno-builtin -fno-stack-protector \
-          -mno-red-zone -mcmodel=kernel -I$(KERNEL_DIR)/include -I$(LIBC_DIR)/include
-CXXFLAGS := $(CFLAGS) -fno-use-cxa-atexit
+          -mno-red-zone -fno-pie -fno-pic \
+          -I$(KERNEL_DIR)/include
+CXXFLAGS := $(CFLAGS) -fno-rtti -fno-use-cxa-atexit
 ASFLAGS := -f elf64
 LDFLAGS := -nostdlib -n -T $(KERNEL_DIR)/arch/x86_64/linker.ld
 
 # Fichiers sources
-KERNEL_C_SOURCES := $(shell find $(KERNEL_DIR) -name '*.c')
-KERNEL_CXX_SOURCES := $(shell find $(KERNEL_DIR) -name '*.cpp')
-KERNEL_ASM_SOURCES := $(shell find $(KERNEL_DIR) -name '*.asm')
-
-LIBC_C_SOURCES := $(shell find $(LIBC_DIR)/src -name '*.c')
+KERNEL_C_SOURCES := $(shell find $(KERNEL_DIR) -name '*.c' 2>/dev/null || true)
+KERNEL_CXX_SOURCES := $(shell find $(KERNEL_DIR) -name '*.cpp' 2>/dev/null || true)
+KERNEL_ASM_SOURCES := $(shell find $(KERNEL_DIR) -name '*.asm' 2>/dev/null || true)
+USERLAND_C_SOURCES := $(shell find $(USERLAND_DIR) -name '*.c' 2>/dev/null || true)
 
 # Fichiers objets
 KERNEL_C_OBJECTS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(KERNEL_C_SOURCES))
 KERNEL_CXX_OBJECTS := $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(KERNEL_CXX_SOURCES))
 KERNEL_ASM_OBJECTS := $(patsubst %.asm,$(BUILD_DIR)/%.o,$(KERNEL_ASM_SOURCES))
-LIBC_OBJECTS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(LIBC_C_SOURCES))
+USERLAND_C_OBJECTS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(USERLAND_C_SOURCES))
 
-ALL_OBJECTS := $(KERNEL_C_OBJECTS) $(KERNEL_CXX_OBJECTS) $(KERNEL_ASM_OBJECTS) $(LIBC_OBJECTS)
+ALL_OBJECTS := $(KERNEL_C_OBJECTS) $(KERNEL_CXX_OBJECTS) $(KERNEL_ASM_OBJECTS) $(USERLAND_C_OBJECTS)
 
 # Cible principale
 KERNEL_BIN := $(BUILD_DIR)/nexus.bin
@@ -72,6 +71,7 @@ $(BUILD_DIR)/%.o: %.asm
 iso: $(KERNEL_BIN)
 	@echo "Creating ISO image..."
 	@mkdir -p $(ISO_DIR)/boot/grub
+	@mkdir -p $(ISO_DIR)/nexus
 	@cp $(KERNEL_BIN) $(ISO_DIR)/nexus/nexus.bin
 	@cp $(BOOT_DIR)/grub/grub.cfg $(ISO_DIR)/boot/grub/
 	grub-mkrescue -o nexus.iso $(ISO_DIR)
