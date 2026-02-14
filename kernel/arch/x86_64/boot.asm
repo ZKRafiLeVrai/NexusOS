@@ -1,5 +1,6 @@
 ; NexusOS Bootloader - Multiboot2 compliant
 ; Architecture: x86_64 (64-bit)
+; Supporte BIOS et UEFI
 
 section .multiboot
 align 8
@@ -36,15 +37,14 @@ stack_bottom:
 stack_top:
 
 ; Page tables pour le mode 64-bit
+; On va mapper les premiers 4GB avec des huge pages (2MB)
 align 4096
 pml4_table:
     resb 4096
 pdp_table:
     resb 4096
-pd_table:
-    resb 4096
-pt_table:
-    resb 4096
+pd_tables:
+    resb 4096 * 4  ; 4 tables PD pour 4GB (512 * 2MB * 4 = 4GB)
 
 section .note.GNU-stack noalloc noexec nowrite progbits
 
@@ -64,15 +64,27 @@ kernel_entry:
     ; Configurer la pile
     mov esp, stack_top
     
+    ; Afficher 'OK' pour debug
+    mov dword [0xb8000], 0x0f4b0f4f  ; 'OK' en blanc
+    
     ; Vérifier le support du mode long
     call check_cpuid
     call check_long_mode
     
-    ; Configurer les tables de pagination
+    ; Afficher '64' pour debug
+    mov dword [0xb8004], 0x0f340f36  ; '64' en blanc
+    
+    ; Configurer les tables de pagination (4GB)
     call setup_page_tables
+    
+    ; Afficher 'PG' pour debug
+    mov dword [0xb8008], 0x0f470f50  ; 'PG' en blanc
     
     ; Activer la pagination
     call enable_paging
+    
+    ; Afficher 'EN' pour debug
+    mov dword [0xb800c], 0x0f4e0f45  ; 'EN' en blanc
     
     ; Charger le GDT 64-bit
     lgdt [gdt64.pointer]
@@ -81,7 +93,6 @@ kernel_entry:
     jmp gdt64.code:long_mode_start
 
 check_cpuid:
-    ; Vérifier si CPUID est supporté
     pushfd
     pop eax
     mov ecx, eax
@@ -96,12 +107,11 @@ check_cpuid:
     je .no_cpuid
     ret
 .no_cpuid:
-    mov dword [0xb8000], 0x4f434f4e  ; 'NC' en blanc sur rouge
+    mov dword [0xb8000], 0x4f434f4e  ; 'NC' en rouge
     hlt
     jmp $
 
 check_long_mode:
-    ; Vérifier le support du mode long
     mov eax, 0x80000000
     cpuid
     cmp eax, 0x80000001
@@ -113,54 +123,43 @@ check_long_mode:
     jz .no_long_mode
     ret
 .no_long_mode:
-    mov dword [0xb8000], 0x4f4c4f4e  ; 'NL' en blanc sur rouge
+    mov dword [0xb8000], 0x4f4c0f4e  ; 'NL' en rouge
     hlt
     jmp $
 
 setup_page_tables:
     ; Nettoyer toutes les tables
     mov edi, pml4_table
-    mov ecx, 4096  ; 4 * 4096 / 4
+    mov ecx, 6144  ; (1 + 1 + 4) * 1024 pages
     xor eax, eax
     rep stosd
     
-    ; PML4[0] -> PDP (identity mapping low memory)
+    ; PML4[0] -> PDP
     mov eax, pdp_table
     or eax, 0b11        ; Present + writable
     mov [pml4_table], eax
     
-    ; PDP[0] -> PD
-    mov eax, pd_table
+    ; PDP[0..3] -> PD[0..3] (4 entrées pour 4GB)
+    mov ecx, 4          ; 4 tables PD
+    mov edi, pdp_table
+    mov eax, pd_tables
     or eax, 0b11
-    mov [pdp_table], eax
-    
-    ; PD[0] -> PT (map first 2MB using 4KB pages for better control)
-    mov eax, pt_table
-    or eax, 0b11
-    mov [pd_table], eax
-    
-    ; Remplir PT avec les 512 premières pages (2MB total)
-    mov edi, pt_table
-    mov eax, 0x00000003  ; Page 0, present + writable
-    mov ecx, 512         ; 512 pages de 4KB = 2MB
-.map_pt:
+.setup_pdp:
     mov [edi], eax
-    add eax, 0x1000     ; Prochaine page de 4KB
+    add eax, 0x1000     ; Prochaine table PD
     add edi, 8
-    loop .map_pt
+    loop .setup_pdp
     
-    ; Mapper aussi les 6MB suivants avec huge pages pour le reste du kernel
-    mov eax, 0x200000   ; 2MB
-    or eax, 0b10000011  ; Present + writable + huge page
-    mov [pd_table + 8], eax
-    
-    mov eax, 0x400000   ; 4MB
-    or eax, 0b10000011
-    mov [pd_table + 16], eax
-    
-    mov eax, 0x600000   ; 6MB
-    or eax, 0b10000011
-    mov [pd_table + 24], eax
+    ; Remplir les 4 tables PD avec des huge pages (2MB chacune)
+    ; Total: 4 tables * 512 entrées * 2MB = 4GB
+    mov edi, pd_tables
+    mov eax, 0x00000083  ; Page 0, present + writable + huge page
+    mov ecx, 2048        ; 4 tables * 512 entrées
+.map_pd:
+    mov [edi], eax
+    add eax, 0x200000   ; Prochaine huge page de 2MB
+    add edi, 8
+    loop .map_pd
     
     ret
 
@@ -171,7 +170,7 @@ enable_paging:
     
     ; Activer PAE (Physical Address Extension)
     mov eax, cr4
-    or eax, 1 << 5
+    or eax, 1 << 5      ; PAE
     mov cr4, eax
     
     ; Activer le mode long dans EFER MSR
@@ -191,6 +190,10 @@ enable_paging:
 
 bits 64
 long_mode_start:
+    ; Afficher 'LM' pour debug (mode long activé)
+    mov rax, 0x0f4d0f4c  ; 'LM' en blanc
+    mov [0xb8010], rax
+    
     ; Charger les segments de données
     mov ax, gdt64.data
     mov ds, ax
@@ -219,6 +222,10 @@ long_mode_start:
     xor r14, r14
     xor r15, r15
     
+    ; Afficher 'GO' pour debug
+    mov rax, 0x0f4f0f47  ; 'GO' en blanc
+    mov [0xb8014], rax
+    
     ; Appeler le kernel C/C++
     call kernel_main
     
@@ -232,9 +239,9 @@ section .rodata
 gdt64:
     dq 0                                          ; Null descriptor
 .code: equ $ - gdt64
-    dq (1<<43) | (1<<44) | (1<<47) | (1<<53)     ; Code segment (64-bit, executable, present, long mode)
+    dq (1<<43) | (1<<44) | (1<<47) | (1<<53)     ; Code segment (64-bit)
 .data: equ $ - gdt64
-    dq (1<<44) | (1<<47)                          ; Data segment (present, writable)
+    dq (1<<44) | (1<<47)                          ; Data segment
 .pointer:
     dw $ - gdt64 - 1
     dq gdt64
