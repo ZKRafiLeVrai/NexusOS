@@ -1,0 +1,25 @@
+# Build artifacts
+build/
+*.o
+*.bin
+*.elf
+*.iso
+*.img
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Backup files
+*.bak
+*.backup
