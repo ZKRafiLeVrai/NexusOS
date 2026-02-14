@@ -17,13 +17,19 @@ typedef int64_t            ssize_t;
 typedef uint64_t           uintptr_t;
 typedef int64_t            intptr_t;
 
-// Valeurs booléennes
+// Valeurs booléennes (seulement pour C, pas C++)
+#ifndef __cplusplus
 typedef int                bool;
 #define true               1
 #define false              0
+#endif
 
 // NULL
+#ifdef __cplusplus
+#define NULL               nullptr
+#else
 #define NULL               ((void*)0)
+#endif
 
 // Attributs de fonction
 #define PACKED             __attribute__((packed))

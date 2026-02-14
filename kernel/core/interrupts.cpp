@@ -9,7 +9,7 @@ static struct idt_ptr idtp;
 static interrupt_handler_t interrupt_handlers[IDT_ENTRIES];
 
 // Fonctions ASM externes (définies dans interrupt_handlers.asm)
-extern void* isr_stub_table[];
+extern "C" void* isr_stub_table[];
 
 // Remapper le PIC
 static void pic_remap(void) {
@@ -58,10 +58,10 @@ static void idt_set_gate(uint8_t num, void* handler, uint8_t flags) {
     idt[num].zero = 0;
 }
 
-void interrupts_init(void) {
-    // Initialiser les handlers à NULL
+extern "C" void interrupts_init(void) {
+    // Initialiser les handlers à nullptr
     for (int i = 0; i < IDT_ENTRIES; i++) {
-        interrupt_handlers[i] = NULL;
+        interrupt_handlers[i] = nullptr;
     }
     
     // Remapper le PIC
@@ -79,7 +79,7 @@ void interrupts_init(void) {
     asm volatile("lidt %0" : : "m"(idtp));
 }
 
-void register_interrupt_handler(uint8_t n, interrupt_handler_t handler) {
+extern "C" void register_interrupt_handler(uint8_t n, interrupt_handler_t handler) {
     interrupt_handlers[n] = handler;
 }
 
